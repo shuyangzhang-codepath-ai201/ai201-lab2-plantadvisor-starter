@@ -122,7 +122,13 @@ for tool_call in assistant_message.tool_calls:
 *The loop should stop when: (a) the LLM returns a response with no tool calls, OR (b) the MAX_TOOL_ROUNDS limit is reached. Describe how you will detect each condition and what you will return in each case.*
 
 ```
-[your answer here]
+(a) No tool calls: after each LLM call, check `if not assistant_message.tool_calls`.
+    If True, the LLM has a final answer — return `assistant_message.content` immediately.
+
+(b) MAX_TOOL_ROUNDS reached: the for loop exhausts its iterations without hitting
+    condition (a). At that point, make one final LLM call without tools (no TOOL_DEFINITIONS)
+    to force a text response, and return `response.choices[0].message.content`.
+    This prevents an infinite loop if the model keeps requesting tools without converging.
 ```
 
 ---
@@ -132,7 +138,11 @@ for tool_call in assistant_message.tool_calls:
 *Once the loop exits because there are no more tool calls, how do you extract the text content from the response object? What field holds the string you should return?*
 
 ```
-[your answer here]
+response.choices[0].message.content
+
+- response.choices  → list of completion choices (index 0 is the first/only one)
+- .message          → the assistant message object
+- .content          → the text string the model generated
 ```
 
 ---
@@ -145,19 +155,25 @@ for tool_call in assistant_message.tool_calls:
 
 ```
 Query: "How should I care for my calathea?"
-Round 1 tool call: [tool name, args]
-Round 2 tool call: [tool name, args] (if any)
-Final response: [brief description]
+Round 1 tool call: lookup_plant({'plant_name': 'calathea'}) → found: true
+Round 2 tool call: (none — LLM answered directly from plant data)
+Final response: specific care advice citing the Calathea database entry
 ```
 
 **What happens when you ask about a plant that isn't in the database?**
 
 ```
-[describe the behavior you observed]
+lookup_plant returns found: False with a message instructing the LLM not to invent data.
+The agent acknowledges the plant isn't in its database and offers general guidance based
+on the plant's type (e.g., for "string of pearls" → succulent care tips), then recommends
+consulting a specialist source for specific advice.
 ```
 
 **One thing about the tool call API that surprised you:**
 
 ```
-[your answer here]
+When the LLM calls a tool with no arguments (e.g., get_seasonal_conditions with no season),
+tool_call.function.arguments can be an empty string or the JSON string "null" — not an
+empty dict "{}". json.loads() on either of those doesn't give you {}, so you have to guard
+with: json.loads(args or "{}") or {}
 ```

@@ -52,10 +52,30 @@ def lookup_plant(plant_name: str) -> dict:
 
     Before writing code, complete the lookup_plant section of specs/tool-functions-spec.md.
     """
+
+    # TODO: Implement the search logic as described in the docstring.
+    query = plant_name.strip().lower() # 
+
+    for key, plant in _plant_db.items():
+        if (
+            query == key
+            or query == plant["display_name"].lower()
+            or query in [a.lower() for a in plant.get("aliases", [])]
+        ):
+            # If we find a match, return the plant data in the specified format.
+            return {"found": True, "plant": plant} # 
+
+    # If no match is found, return a not-found response.
     return {
         "found": False,
         "name": plant_name,
-        "message": "Plant lookup not yet implemented. Complete Milestone 1.",
+        "message": (
+            f"'{plant_name}' is not in the plant database. "
+            "Do not invent specific care instructions for this plant. "
+            "Acknowledge it is not in your database, then offer general guidance "
+            "based on the plant's type or family if identifiable. "
+            f"Plants available in the database: {', '.join(p['display_name'] for p in _plant_db.values())}."
+        ),
     }
 
 

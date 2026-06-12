@@ -70,7 +70,12 @@ likely match for clean user input. Aliases are the broadest net, so they go last
 *Aliases are stored as a list of strings. How will you check if the normalized input matches any alias in the list? Write your approach in pseudocode or plain English.*
 
 ```
-[your answer here]
+Normalize the query to lowercase. For each plant, build a lowercase list of all its
+aliases and check if the query is in that list:
+
+  query in [a.lower() for a in plant.get("aliases", [])]
+
+This handles plants with no aliases (empty list) gracefully via .get() default.
 ```
 
 ---
@@ -80,7 +85,13 @@ likely match for clean user input. Aliases are the broadest net, so they go last
 *When a plant isn't found, the agent will read your message and use it to decide what to tell the user. Write the exact string you'll return — make it useful to the agent, not just to a human reading logs.*
 
 ```
-[your answer here]
+"'{plant_name}' is not in the plant database. Do not invent specific care instructions
+for this plant. Acknowledge it is not in your database, then offer general guidance
+based on the plant's type or family if identifiable. Plants available in the database:
+Pothos, Snake Plant, ZZ Plant, ..."
+
+The message embeds a direct instruction to the LLM alongside the factual gap, so the
+agent knows both what data is missing and how to respond.
 ```
 
 ---
@@ -91,17 +102,20 @@ likely match for clean user input. Aliases are the broadest net, so they go last
 
 **Test: does `"devil's ivy"` return the pothos entry?**
 ```
-[yes / no — if no, describe what happened]
+yes
 ```
 
 **Test: does `"SNAKE PLANT"` return the snake plant entry?**
 ```
-[yes / no — if no, describe what happened]
+yes
 ```
 
 **One edge case you discovered while implementing:**
 ```
-[your answer here]
+get_seasonal_conditions() receives tool_call.function.arguments from the LLM, which
+can be an empty string or the JSON string "null" when no season is provided. Both
+json.loads("") and json.loads("null") fail or return None, not {}. Fixed by:
+  json.loads(tool_call.function.arguments or "{}") or {}
 ```
 
 ---
@@ -183,12 +197,12 @@ The full season dict from `_season_data`, plus a `detected_season` boolean. Exam
 
 **Test: does calling with `season=None` return the correct season for the current month?**
 ```
-Current month: [month]
-Expected season: [season]
-Returned season: [season]
+Current month: 6
+Expected season: summer
+Returned season: Summer
 ```
 
 **Test: does calling with `season="winter"` return winter data regardless of the current month?**
 ```
-[yes / no]
+yes
 ```

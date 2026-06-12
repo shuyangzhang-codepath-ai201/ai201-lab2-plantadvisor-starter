@@ -1,5 +1,5 @@
 import json
-from groq import Groq
+from groq import Groq, BadRequestError
 from config import GROQ_API_KEY, LLM_MODEL, MAX_TOOL_ROUNDS
 from tools import lookup_plant, get_seasonal_conditions
 
@@ -69,8 +69,12 @@ SYSTEM_PROMPT = (
     "Help users care for their houseplants by looking up specific plant information "
     "and current seasonal conditions using your available tools.\n\n"
     "Always use your tools to look up plant-specific information before answering — "
-    "don't rely on your general knowledge alone. If a plant isn't in your database, "
-    "say so clearly and offer general guidance based on what the user describes.\n\n"
+    "don't rely on your general knowledge alone.\n\n"
+    "When lookup_plant returns found: False, do NOT invent specific care instructions "
+    "as if you had real data for that plant. Instead: (1) clearly tell the user the plant "
+    "is not in your database, (2) offer general guidance based on the plant's type or family "
+    "(e.g., succulent, tropical, fern) if you can identify it, and (3) be explicit about "
+    "what is your database data versus general knowledge.\n\n"
     "Keep your advice practical and specific. Cite the source of your information "
     "when you have it (e.g., 'According to the care data for your monstera...')."
 )
@@ -128,4 +132,46 @@ def run_agent(user_message: str, history: list) -> str:
 
     Before writing code, complete specs/agent-loop-spec.md.
     """
-    return "🌱 Agent not yet implemented. Complete Milestone 2 to activate the Plant Advisor."
+    # Build messages: system prompt + history + new user turn
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for user_msg, assistant_msg in history:
+        messages.append({"role": "user", "content": user_msg})
+        if assistant_msg:
+            messages.append({"role": "assistant", "content": assistant_msg})
+    messages.append({"role": "user", "content": user_message})
+
+    for _ in range(MAX_TOOL_ROUNDS):
+        try:
+            response = _client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=messages,
+                tools=TOOL_DEFINITIONS,
+                tool_choice="auto",
+            )
+        except BadRequestError:
+            # Model generated a malformed tool call — force a plain text response
+            break
+
+        assistant_message = response.choices[0].message
+
+        if not assistant_message.tool_calls:
+            return assistant_message.content
+
+        # Append assistant message (with tool_calls) before tool results
+        messages.append(assistant_message)
+
+        for tool_call in assistant_message.tool_calls:
+            tool_args = json.loads(tool_call.function.arguments or "{}") or {}
+            tool_result = dispatch_tool(tool_call.function.name, tool_args)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result,
+            })
+
+    # Fallback: final call after MAX_TOOL_ROUNDS or on malformed tool call
+    response = _client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=messages,
+    )
+    return response.choices[0].message.content
